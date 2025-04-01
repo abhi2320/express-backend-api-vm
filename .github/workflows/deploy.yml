@@ -1,0 +1,41 @@
+name: Deploy to VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'  # Choose your preferred Node.js version
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Copy files to VM
+      env:
+        VM_HOST: ${{ secrets.VM_HOST }}
+        VM_USER: ${{ secrets.VM_USER }}
+        SSH_KEY: ${{ secrets.SSH_KEY }}
+      run: |
+        echo "$SSH_KEY" > private_key.pem
+        chmod 600 private_key.pem
+        rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" ./ $VM_USER@$VM_HOST:/home/$VM_USER/express-backend-api
+    - name: Restart Service on VM
+      env:
+        VM_HOST: ${{ secrets.VM_HOST }}
+        VM_USER: ${{ secrets.VM_USER }}
+        SSH_KEY: ${{ secrets.SSH_KEY }}
+      run: |
+        ssh -i private_key.pem -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd ~/express-backend-api && npm install && pm2 restart all || pm2 start server.js --name express-api"
+    
+
