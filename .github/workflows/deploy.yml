@@ -16,7 +16,8 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '16'  
+        node-version: '16'
+
     - name: Install dependencies
       run: npm install
 
@@ -26,15 +27,25 @@ jobs:
         VM_USER: ${{ secrets.VM_USER }}
         SSH_KEY: ${{ secrets.SSH_KEY }}
       run: |
-        echo "$SSH_KEY" > private_key.pem
+        # Store the private key safely
+        printf "%s" "$SSH_KEY" > private_key.pem
         chmod 600 private_key.pem
+
+        # Ensure the deployment directory exists
+        ssh -i private_key.pem -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "mkdir -p ~/express-backend-api"
+
+        # Sync project files to the VM
         rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" ./ $VM_USER@$VM_HOST:/home/$VM_USER/express-backend-api
+
     - name: Restart Service on VM
       env:
         VM_HOST: ${{ secrets.VM_HOST }}
         VM_USER: ${{ secrets.VM_USER }}
         SSH_KEY: ${{ secrets.SSH_KEY }}
       run: |
-        ssh -i private_key.pem -o StrictHostKeyChecking=no $VM_USER@$VM_HOST "cd ~/express-backend-api && npm install && pm2 restart all || pm2 start server.js --name express-api"
-    
-
+        ssh -i private_key.pem -o StrictHostKeyChecking=no $VM_USER@$VM_HOST << 'EOF'
+        cd ~/express-backend-api
+        npm install
+        pm2 restart express-api || pm2 start server.js --name express-api
+        pm2 save
+        EOF
